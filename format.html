@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+     <head>
+        <meta charset="UTF-8">
+        <title>here is the demonstration</title>
+        <script src="js/jquery.min.js"></script>
+        <script src="js/canvasresize.js"></script>
+         <script src="js/binaryajax.js"></script>
+         <script src="js/exif.js"></script>
+     </head>
+     <body>
+        <!-- this is the demonstration about how to load and compress pic into browser depending on different os -->
+        <input type="file" accept="image/*" id="imgInput">
+
+        <script type="text/javascript">
+
+            var el=document.getElementById('imgInput');
+            el.addEventListener('change',loadImg,false);
+
+            function loadImg(event){
+                if(event.target.files.length==1 && event.target.files[0].type.indexOf('image/')==0){
+                    var fileObj=event.target.files[0];
+                    var os=detectOs();
+                    var imgHandler= new ImgHandler(fileObj,os);
+                    imgHandler.renderImg();
+                }
+                else{
+                    alert('an error happened loading image');
+                }
+            }
+
+            function detectOs(){
+                var browser=navigator.userAgent;
+                var isIOS=!!browser.match(/\(i[^;]+;(U;)? CPU.+Mac OS X/);
+                var isADR=(browser.indexOf('Android')>-1 || browser.indexOf('Linux')>-1);
+                if(isIOS){console.log('this is ios ');return 'ios'};
+                if(isADR){console.log('this is android');return 'adr'};
+                if(1){console.log('this is desktop');return 'desktop'};
+            }
+
+
+
+            //ImgHandler prototype
+            var ImgHandler=function(imgfile,theos){
+
+                this.file=imgfile;
+                this.os=theos;
+
+                this.renderImg=function(){
+
+                    if(this.os=='ios'){
+                        this.iosCompress(delegate(this,onCompressReady));
+                    }
+                    else{
+                        this.adrCompress(delegate(this,onCompressReady));
+                    }
+
+                    function onCompressReady(returnImgSrc){
+                        var src= returnImgSrc;
+                        var img=document.createElement('img');
+                        img.src=src;
+                        document.body.appendChild(img);
+                    }
+                }
+
+                this.iosCompress=function(aCallback){ //apply canvasresize.js along with binaryajax and exif before loading to memory
+                                                      //to avoid memory crush
+                    var _file=this.file,
+                        _callback=aCallback,
+                        _desiredW=100,
+                        _desiredH=100;
+
+                    canvasResize(_file,{
+                        width:_desiredW,
+                        height:_desiredH,
+                        crop:false,
+                        quality:95,
+                        callback:function(data){
+                            _callback(data);
+                        }
+                    })
+                }
+
+                this.adrCompress=function(aCallback){
+
+                    var _file=this.file,
+                        _callback=aCallback,
+                        _src=URL.createObjectURL(_file);
+
+                    var renewImgSrc= new RenewImgSrc();
+                    renewImgSrc.returnNewImgSrc(_src,delegate(this,imgSrcReady));
+
+                    function imgSrcReady(returnImgSrc){
+                        _callback(returnImgSrc);
+                    }
+                }
+
+                // define delegate helper for function scope
+                var delegate=function(object,method){
+                    return function(){
+                        method.apply(object,arguments);
+                    }
+                }
+
+                var RenewImgSrc=function(){ // compress prototype;
+
+                    var _this=this,
+                        _limitW=1000,// desired width
+                        _limitH=1000;// desired height
+
+                    _this.returnNewImgSrc=function(oImgSrc,aCallback){
+
+                        var tmpImg=document.createElement('img');
+                        tmpImg.setAttribute('src',oImgSrc);
+                        tmpImg.onload=function(){
+                            var ow=this.width;
+                            var oh=this.height;
+                            if(exceedsLimit(_limitW,_limitH,ow,oh)){
+                                var tmpCanvas=document.createElement('canvas');
+                                var ctx=tmpCanvas.getContext('2d');
+                                var optImgSize=resize(_limitW,_limitH,ow,oh);
+                                tmpCanvas.width=optImgSize.w;
+                                tmpCanvas.height=optImgSize.h;
+                                ctx.drawImage(this,0,0,tmpCanvas.width,tmpCanvas.height);
+                                var imgSrc=tmpCanvas.toDataURL('image/jpeg',0.95);
+                                aCallback(imgSrc);
+                            }
+                            else{
+                                var imgSrc=oImgSrc;
+                                aCallback(imgSrc);
+                            }
+                        }
+                    }
+
+                    // private
+                    function exceedsLimit(maxW,maxH,imgW,imgH){
+                        return( imgW>maxW || imgH>maxH);
+                    }
+
+                    function resize(maxW,maxH,imgW,imgH){
+                        var d={w:imgW,h:imgH};
+                        if(imgW>maxW){
+                            d.w=maxW;
+                            d.h=maxW*imgH/imgW;
+                        }
+                        if(d.h>maxH){
+                            d.h=maxH;
+                            d.w=maxH*imgW/imgH;
+                        }
+                        return d;
+                    }
+                }
+            }
+        </script>
+     </body>
+</html>
